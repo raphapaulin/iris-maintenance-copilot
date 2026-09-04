@@ -29,6 +29,17 @@ TABLES = {
                 FOREIGN KEY (equipment_id) REFERENCES SQLUser.Equipment (id)
         )
     """,
+    "DocumentChunk": """
+        CREATE TABLE SQLUser.DocumentChunk (
+            id INTEGER NOT NULL PRIMARY KEY,
+            source VARCHAR(300) NOT NULL,
+            title VARCHAR(300) NOT NULL,
+            document_section VARCHAR(200),
+            equipment_type VARCHAR(100),
+            content VARCHAR(8000) NOT NULL,
+            embedding VECTOR(FLOAT, 384) NOT NULL
+        )
+    """,
 }
 
 

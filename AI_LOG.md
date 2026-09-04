@@ -126,3 +126,77 @@ results could therefore not be tested in this iteration. The SQL catalog,
 `TIMESTAMP`, `VARCHAR`, primary-key, and foreign-key approach was checked
 against the InterSystems IRIS SQL documentation, but still requires the live
 credentialed validation commands documented in the handoff.
+
+## 2026-09-04 — First semantic retrieval layer
+
+### Goal
+
+Add semantic retrieval over a small synthetic industrial-maintenance knowledge
+base, with vector storage and cosine similarity calculation performed by
+InterSystems IRIS.
+
+### Embedding and retrieval design
+
+The required `sentence-transformers/all-MiniLM-L6-v2` model was selected as a
+compact general-purpose sentence embedding model suitable for this first
+retrieval proof. It produces 384-dimensional embeddings and is loaded once per
+Python process through a cached helper.
+
+The external Python application serializes each real model embedding as a
+comma-separated string because the DB-API transports vector input as text.
+IRIS converts that parameter with `TO_VECTOR(?, FLOAT, 384)` and stores it in a
+native `VECTOR(FLOAT, 384)` column. Query embeddings use the same conversion,
+and IRIS computes and orders similarity with `VECTOR_COSINE(... ) DESC`.
+Cosine similarity is not calculated in Python.
+
+### Files changed
+
+- `requirements.txt`
+- `src/init_db.py`
+- `src/embedding_model.py`
+- `src/knowledge_base.py`
+- `src/ingest_knowledge.py`
+- `src/semantic_search.py`
+- `src/validate_vector_search.py`
+- `AI_LOG.md`
+
+### Commands and validation actually executed
+
+- `python -m pip install -r requirements.txt`: passed; installed
+  `sentence-transformers==6.0.1` and its dependencies.
+- `python -m compileall -q src`: passed.
+- Loaded `sentence-transformers/all-MiniLM-L6-v2` and embedded two real text
+  samples: passed with shape `(2, 384)` and finite numeric values.
+- Called the model helper twice in one process: passed; the same cached model
+  object was returned.
+- Checked the 12 chunks for unique IDs and required content, and checked that
+  vector serialization retained all 384 values: passed.
+- `python -m pip check`: passed with no broken requirements.
+- `python -m src.init_db`, `python -m src.ingest_knowledge`, and
+  `python -m src.validate_vector_search`: each stopped with the expected
+  `IRIS_PASSWORD environment variable is required` error.
+- `git diff --check`: passed.
+
+### Failures, warnings, and corrections
+
+The model download emitted a non-fatal Hugging Face warning that Windows could
+not use symlinks in its external user cache; model loading and embedding still
+succeeded. No project setting was added to suppress the warning.
+
+`IRIS_PASSWORD` was not present in this process. Consequently, creation of
+`SQLUser.DocumentChunk`, vector ingestion, repeat-safe ingestion, execution of
+`VECTOR_COSINE`, returned rankings, and semantic relevance assertions were not
+live-tested. Live IRIS vector search is therefore **not yet validated** by this
+AI session and must not be reported as successful until the credentialed
+commands pass.
+
+### Live IRIS compatibility correction
+
+Subsequent live validation exposed SQLCODE `-1`: IRIS expected an identifier
+but found the reserved word `SECTION`. Because `section` was used as a column
+name, creation of `SQLUser.DocumentChunk` failed. The ingestion and semantic
+search failures were downstream consequences of that table not existing.
+
+The column and all directly related SQL and Python references were renamed to
+the unambiguous identifier `document_section`; the reserved identifier was not
+quoted. Live vector search has not yet been re-validated after this correction.
