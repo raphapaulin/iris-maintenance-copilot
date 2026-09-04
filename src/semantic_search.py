@@ -35,8 +35,10 @@ def semantic_search(query, top_k=3):
                 "equipment_type": row[4],
                 "content": row[5],
                 "similarity": float(row[6]),
+                "semantic_score": float(row[6]),
+                "semantic_rank": rank,
             }
-            for row in cursor.fetchall()
+            for rank, row in enumerate(cursor.fetchall(), start=1)
         ]
     finally:
         cursor.close()

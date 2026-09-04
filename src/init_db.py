@@ -4,6 +4,7 @@ from src.iris_connection import get_connection
 
 
 SCHEMA = "SQLUser"
+LEXICAL_INDEX = "DocumentChunkContentIdx"
 
 TABLES = {
     "Equipment": """
@@ -56,6 +57,18 @@ def table_exists(cursor, table_name):
     return cursor.fetchone()[0] > 0
 
 
+def index_exists(cursor, table_name, index_name):
+    cursor.execute(
+        """
+        SELECT COUNT(*)
+        FROM INFORMATION_SCHEMA.INDEXES
+        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND INDEX_NAME = ?
+        """,
+        (SCHEMA, table_name, index_name),
+    )
+    return cursor.fetchone()[0] > 0
+
+
 def initialize_database():
     connection = get_connection()
     cursor = connection.cursor()
@@ -67,6 +80,18 @@ def initialize_database():
             else:
                 cursor.execute(create_sql)
                 print(f"Created table {SCHEMA}.{table_name}.")
+
+        if index_exists(cursor, "DocumentChunk", LEXICAL_INDEX):
+            print(f"Index {LEXICAL_INDEX} already exists; skipping.")
+        else:
+            cursor.execute(
+                """
+                CREATE INDEX DocumentChunkContentIdx
+                ON TABLE SQLUser.DocumentChunk (content)
+                AS %iFind.Index.Basic (LANGUAGE='en', LOWER=1)
+                """
+            )
+            print(f"Created lexical index {LEXICAL_INDEX}.")
         connection.commit()
     except Exception:
         connection.rollback()

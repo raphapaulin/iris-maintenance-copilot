@@ -200,3 +200,69 @@ search failures were downstream consequences of that table not existing.
 The column and all directly related SQL and Python references were renamed to
 the unambiguous identifier `document_section`; the reserved identifier was not
 quoted. Live vector search has not yet been re-validated after this correction.
+
+## 2026-09-04 — Hybrid retrieval with IRIS SQL Search and RRF
+
+### Goal and rationale
+
+Add lexical retrieval alongside the live-validated semantic vector retrieval.
+Semantic search helps retrieve conceptually related wording, while lexical
+search rewards exact maintenance terms such as `cavitation` and `misalignment`.
+Hybrid retrieval combines their complementary ranked evidence without adding
+an answer-generating LLM.
+
+### Lexical retrieval in IRIS
+
+Initialization now checks `INFORMATION_SCHEMA.INDEXES` before creating
+`DocumentChunkContentIdx` on `SQLUser.DocumentChunk.content` as a supported
+`%iFind.Index.Basic` index with English language processing and lowercase
+normalization. Existing tables, chunks, and embeddings are left unchanged.
+
+The external application deterministically extracts lowercase alphanumeric or
+hyphenated terms, removes a small fixed stopword set, removes duplicates, and
+joins the terms with `OR`. IRIS performs candidate matching with
+`%ID %FIND search_index(...)` and calculates lexical TF-IDF rank using
+`%iFind.Rank`. The table's generated IRIS class name is read from
+`INFORMATION_SCHEMA.TABLES` rather than assumed.
+
+### Reciprocal Rank Fusion
+
+Python combines the two rankings using
+`RRF_score(d) = sum(1 / (k + rank_i(d)))`, with default `k = 60`. RRF was used
+instead of adding raw cosine and TF-IDF values because those scores have
+different, non-comparable scales. Vector similarity and lexical retrieval both
+execute inside IRIS; only rank fusion executes in Python.
+
+### Files changed
+
+- `src/init_db.py`
+- `src/semantic_search.py`
+- `src/lexical_search.py`
+- `src/hybrid_search.py`
+- `src/validate_hybrid_search.py`
+- `AI_LOG.md`
+
+### Validation executed
+
+- `python -m compileall -q src`: passed.
+- Deterministic preparation of the first validation query produced
+  `high OR vibration OR motor OR drive-end OR bearing`: passed.
+- A focused RRF check verified that a document at semantic rank 1 and lexical
+  rank 2 receives `1/61 + 1/62`: passed.
+- `python -m src.init_db`: stopped at the required missing-password guard.
+- `python -m src.validate_hybrid_search`: loaded the real embedding model, then
+  stopped at the required missing-password guard.
+- `git diff --check`: passed.
+
+### Live-validation status and uncertainties
+
+The previously corrected vector layer is now reported by the project owner as
+live-validated against IRIS. This process did not have `IRIS_PASSWORD`, so it
+could not create or inspect the iFind index, execute lexical SQL, verify index
+repeat safety, or run hybrid retrieval against IRIS. No live hybrid results are
+claimed. Any IRIS-specific runtime error from index creation, `%FIND`, or
+`%iFind.Rank` must be captured and corrected during credentialed re-validation.
+
+Current IRIS documentation uses `%ID %FIND search_index(...)` for
+`%iFind.Index.Basic`; deprecated iFind Semantic and Analytic index types were
+not used.
