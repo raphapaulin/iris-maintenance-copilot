@@ -84,5 +84,45 @@ Successful output:
 Connected to InterSystems IRIS successfully!
 Namespace: MAINTENANCE
 IRIS timestamp: 2026-09-02 02:28:10
+```
 
-    
+## 2026-09-04 — First structured operational-data layer
+
+### Goal
+
+Add a small, reusable SQL data layer for equipment and synthetic maintenance
+events without introducing an ORM, web framework, or AI/RAG functionality.
+
+### AI assistance
+
+AI was asked to add environment-based IRIS connection handling, idempotent
+table initialization, repeatable synthetic seed data, and readable validation
+queries including an equipment-to-maintenance-event join.
+
+### Files changed
+
+- `src/__init__.py`
+- `src/iris_connection.py`
+- `src/init_db.py`
+- `src/seed_data.py`
+- `src/validate_data.py`
+- `AI_LOG.md`
+
+### Validation executed
+
+- Python bytecode compilation of every module under `src/`: passed.
+- The initialization, seed, and validation modules were each run without
+  `IRIS_PASSWORD`; each failed as intended with the explicit missing-password
+  message before attempting a connection.
+- Initialization with a temporary password value and a non-numeric
+  `IRIS_PORT` failed with the intended port-validation message.
+- `git diff --check`: passed.
+
+### Uncertainty and limitation
+
+The IRIS container was running, but `IRIS_PASSWORD` was not available in the
+process environment. Table creation, seeding, repeat execution, and live JOIN
+results could therefore not be tested in this iteration. The SQL catalog,
+`TIMESTAMP`, `VARCHAR`, primary-key, and foreign-key approach was checked
+against the InterSystems IRIS SQL documentation, but still requires the live
+credentialed validation commands documented in the handoff.
